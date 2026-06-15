@@ -1,5 +1,6 @@
 #include <FlashSchNet/layers/layers.hpp>
 #include <FlashSchNet/layers/functions.hpp>
+#include <FlashSchNet/utils/GraphBuilder.hpp>
 
 using namespace FlashSchNet;
 
@@ -88,16 +89,22 @@ std::tuple<torch::Tensor, torch::Tensor> SchNetModelImpl::forward(
     torch::Tensor pos, 
     torch::Tensor edge_src, 
     torch::Tensor edge_dst, 
-    torch::Tensor dst_ptr, 
-    torch::Tensor csr_perm, 
-    torch::Tensor src_ptr, 
-    torch::Tensor src_perm
+    utils::GraphBuilder* builder
 ) {
     int num_nodes = x.size(0);
+    int num_edges = edge_src.size(0);
 
     if (!pos.requires_grad()) {
         pos.requires_grad_(true);
     }
+
+    auto opt = torch::TensorOptions().device(torch::kCUDA).dtype(torch::kInt64);
+torch::Tensor dst_ptr = torch::empty({num_nodes + 1}, opt);
+    torch::Tensor dst_perm = torch::empty({num_edges}, opt);
+    torch::Tensor src_ptr = torch::empty({num_nodes + 1}, opt);
+    torch::Tensor src_perm = torch::empty({num_edges}, opt);
+    builder->build_csr_graph(edge_dst, dst_ptr, dst_perm, num_nodes);
+    builder->build_csr_graph(edge_src, src_ptr, src_perm, num_nodes);
 
     auto h = embedding(x);
 
@@ -118,7 +125,7 @@ std::tuple<torch::Tensor, torch::Tensor> SchNetModelImpl::forward(
             edge_src, 
             edge_dst, 
             dst_ptr, 
-            csr_perm, 
+            dst_perm, 
             num_nodes, 
             cutoff, 
             src_ptr, 
@@ -129,7 +136,7 @@ std::tuple<torch::Tensor, torch::Tensor> SchNetModelImpl::forward(
     auto energy = output->forward(h);
     auto total_energy = energy.sum();
     auto grads = torch::autograd::grad(
-        {total_energy}, {pos}, {}, true, true
+        {total_energy}, {pos}, {}, false, false
     );
     torch::Tensor forces = -grads[0];
 

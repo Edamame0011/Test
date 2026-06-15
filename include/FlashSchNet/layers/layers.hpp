@@ -3,6 +3,10 @@
 #include <torch/torch.h>
 
 namespace FlashSchNet{
+    namespace utils {
+        class GraphBuilder;
+    }
+
     struct ShiftedSoftplusImpl : torch::nn::Module {
         torch::Tensor log2;
 
@@ -58,10 +62,7 @@ namespace FlashSchNet{
                 torch::Tensor pos, 
                 torch::Tensor edge_src, 
                 torch::Tensor edge_dst, 
-                torch::Tensor dst_ptr, 
-                torch::Tensor csr_perm, 
-                torch::Tensor src_ptr, 
-                torch::Tensor src_perm
+                utils::GraphBuilder* builder
             );
 
         private:
